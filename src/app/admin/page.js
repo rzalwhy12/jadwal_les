@@ -2,18 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import RoomTabs from '@/components/RoomTabs';
 import DaySelector from '@/components/DaySelector';
 import ScheduleTable from '@/components/ScheduleTable';
 import ScheduleModal from '@/components/ScheduleModal';
 import Legend from '@/components/Legend';
 import { fetchSchedule, saveScheduleItem, deleteScheduleItem } from '@/lib/backendless';
 import { INSTRUMENTS, MODES, DAYS, TIME_SLOTS } from '@/lib/constants';
-import { EMPTY_FILTERS } from '@/lib/filters';
+import { EMPTY_FILTERS, filterSchedule } from '@/lib/filters';
 import { logoutAction } from '@/app/login/actions';
+import FilterBar from '@/components/FilterBar';
 
 export default function AdminPage() {
-  const [selectedRoom, setSelectedRoom] = useState(1);
   const [selectedDay, setSelectedDay] = useState('Semua');
   const [scheduleData, setScheduleData] = useState([]);
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
@@ -26,6 +25,7 @@ export default function AdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDay, setModalDay] = useState('');
   const [modalTime, setModalTime] = useState('');
+  const [modalRoom, setModalRoom] = useState(1);
   const [modalData, setModalData] = useState(null);
 
   // Delete confirmation
@@ -39,7 +39,7 @@ export default function AdminPage() {
   const loadSchedule = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await fetchSchedule(selectedRoom);
+      const data = await fetchSchedule();
       setScheduleData(data);
       setIsOnline(true);
     } catch (error) {
@@ -49,15 +49,16 @@ export default function AdminPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRoom]);
+  }, []);
 
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
 
-  const handleCellClick = (day, timeSlot, data) => {
+  const handleCellClick = (day, timeSlot, data, room) => {
     setModalDay(day);
     setModalTime(timeSlot);
+    setModalRoom(room);
     setModalData(data);
     setModalOpen(true);
   };
@@ -65,6 +66,7 @@ export default function AdminPage() {
   const handleAddNew = () => {
     setModalDay('Senin');
     setModalTime('08:00');
+    setModalRoom(1);
     setModalData(null);
     setModalOpen(true);
   };
@@ -72,20 +74,18 @@ export default function AdminPage() {
   const handleEditFromList = (item) => {
     setModalDay(item.day);
     setModalTime(item.timeSlot);
+    setModalRoom(item.room || 1);
     setModalData(item);
     setModalOpen(true);
   };
 
   const handleSave = async (item) => {
     try {
-      const saved = await saveScheduleItem({
-        ...item,
-        room: selectedRoom,
-      });
+      const saved = await saveScheduleItem(item);
 
       setScheduleData(prev => {
         const existing = prev.findIndex(
-          s => s.day === item.day && s.timeSlot === item.timeSlot
+          s => s.day === item.day && s.timeSlot === item.timeSlot && s.room === item.room
         );
         if (existing >= 0) {
           const updated = [...prev];
@@ -123,6 +123,64 @@ export default function AdminPage() {
     }
   };
 
+  const handleCellDrop = async (draggedData, targetDay, targetTimeSlot, targetRoom, targetData) => {
+    if (
+      draggedData.day === targetDay &&
+      draggedData.timeSlot === targetTimeSlot &&
+      draggedData.room === targetRoom
+    ) {
+      return;
+    }
+
+    try {
+      showToast('🔄 Memindahkan jadwal...', 'info');
+
+      const promises = [];
+
+      const updatedDragged = {
+        ...draggedData,
+        day: targetDay,
+        timeSlot: targetTimeSlot,
+        room: targetRoom
+      };
+      promises.push(saveScheduleItem(updatedDragged));
+
+      let updatedTarget = null;
+      if (targetData) {
+        updatedTarget = {
+          ...targetData,
+          day: draggedData.day,
+          timeSlot: draggedData.timeSlot,
+          room: draggedData.room
+        };
+        promises.push(saveScheduleItem(updatedTarget));
+      }
+
+      await Promise.all(promises);
+
+      setScheduleData(prev => {
+        let newData = [...prev];
+        
+        newData = newData.filter(s => s.objectId !== draggedData.objectId);
+        if (targetData) {
+          newData = newData.filter(s => s.objectId !== targetData.objectId);
+        }
+
+        newData.push(updatedDragged);
+        if (updatedTarget) {
+          newData.push(updatedTarget);
+        }
+
+        return newData;
+      });
+
+      showToast('✅ Jadwal berhasil dipindahkan!');
+    } catch (error) {
+      console.error('Failed to drop schedule:', error);
+      showToast('❌ Gagal memindahkan jadwal.', 'error');
+    }
+  };
+
   // Sort schedule data for list view
   const sortedData = [...scheduleData].sort((a, b) => {
     const dayOrder = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
@@ -130,12 +188,15 @@ export default function AdminPage() {
     return a.timeSlot.localeCompare(b.timeSlot);
   });
 
-  const filteredListData = selectedDay === 'Semua'
+  const filteredByDay = selectedDay === 'Semua'
     ? sortedData
     : sortedData.filter(s => s.day === selectedDay);
 
-  const totalSlots = (selectedDay === 'Semua' ? 7 : 1) * TIME_SLOTS.length;
-  const filledSlots = filteredListData.length;
+  // Apply filter bar on top of day filter
+  const filteredListData = filterSchedule(filteredByDay, filters);
+
+  const totalSlots = (selectedDay === 'Semua' ? 7 : 1) * TIME_SLOTS.length * 2;
+  const filledSlots = filteredByDay.length; // show total filled slots (before filter bar)
 
   return (
     <div className="app-container">
@@ -175,14 +236,13 @@ export default function AdminPage() {
           <div className="admin-stat-label">Slot Kosong</div>
         </div>
         <div className="admin-stat-card">
-          <div className="admin-stat-number">Ruangan {selectedRoom}</div>
+          <div className="admin-stat-number">R1 & R2</div>
           <div className="admin-stat-label">Aktif</div>
         </div>
       </div>
 
       {/* Controls Row */}
-      <div className="admin-controls">
-        <RoomTabs selectedRoom={selectedRoom} onRoomChange={setSelectedRoom} />
+      <div className="admin-controls" style={{ justifyContent: 'flex-end' }}>
         <div className="admin-actions">
           <div className="view-toggle">
             <button
@@ -207,6 +267,11 @@ export default function AdminPage() {
       </div>
 
       <DaySelector selectedDay={selectedDay} onDayChange={setSelectedDay} />
+      <FilterBar
+        filters={filters}
+        onFiltersChange={setFilters}
+        scheduleData={scheduleData}
+      />
 
       {isLoading ? (
         <div className="loading-container">
@@ -219,13 +284,14 @@ export default function AdminPage() {
           selectedDay={selectedDay}
           filters={filters}
           onCellClick={handleCellClick}
+          onCellDrop={handleCellDrop}
         />
       ) : (
         /* List View */
         <div className="admin-list-wrapper">
           {filteredListData.length === 0 ? (
             <div className="empty-state">
-              📭 Belum ada jadwal untuk ruangan {selectedRoom}
+              📭 Belum ada jadwal
               {selectedDay !== 'Semua' && ` hari ${selectedDay}`}.
               <br />
               <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleAddNew}>
@@ -238,6 +304,7 @@ export default function AdminPage() {
                 <tr>
                   <th>Hari</th>
                   <th>Jam</th>
+                  <th>Ruangan</th>
                   <th>Nama Murid</th>
                   <th>Instrumen</th>
                   <th>Mode</th>
@@ -257,11 +324,15 @@ export default function AdminPage() {
                       <td>
                         <span className="list-day">{item.day}</span>
                       </td>
-                      <td>
-                        <span className="list-time">{item.timeSlot} - {endTime}</span>
-                      </td>
-                      <td>
-                        <span className="list-student">{item.studentName}</span>
+                      <td className="time-col">
+                      <div className="list-time">{item.timeSlot}</div>
+                      <div className="list-time-end">{endTime}</div>
+                    </td>
+                    <td>
+                      <span className="list-badge">R{item.room || 1}</span>
+                    </td>
+                    <td className="student-col">
+                      <strong>{item.studentName}</strong>
                       </td>
                       <td>
                         {instrument && (
@@ -322,8 +393,9 @@ export default function AdminPage() {
         onDelete={handleDelete}
         day={modalDay}
         timeSlot={modalTime}
+        room={modalRoom}
         existingData={modalData}
-        isAdmin
+        isAdmin={true}
       />
 
       {toast && (

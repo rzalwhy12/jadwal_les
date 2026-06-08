@@ -1,76 +1,125 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import Header from '@/components/Header';
-import RoomTabs from '@/components/RoomTabs';
-import DaySelector from '@/components/DaySelector';
-import FilterBar from '@/components/FilterBar';
-import ScheduleTable from '@/components/ScheduleTable';
-import Legend from '@/components/Legend';
-import { fetchSchedule } from '@/lib/backendless';
-import { EMPTY_FILTERS } from '@/lib/filters';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { verifyVisitor } from '@/lib/backendless';
 
-export default function HomePage() {
-  const [selectedRoom, setSelectedRoom] = useState(1);
-  const [selectedDay, setSelectedDay] = useState('Semua');
-  const [scheduleData, setScheduleData] = useState([]);
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
-
-  const loadSchedule = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchSchedule(selectedRoom);
-      setScheduleData(data);
-      setIsOnline(true);
-    } catch (error) {
-      console.error('Failed to load schedule:', error);
-      setIsOnline(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedRoom]);
+export default function OpeningPage() {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [phase, setPhase] = useState('intro'); // 'intro' | 'form'
+  const [shakeKey, setShakeKey] = useState(0);
 
   useEffect(() => {
-    loadSchedule();
-  }, [loadSchedule]);
+    // Jika sudah pernah masuk, langsung ke jadwal
+    const stored = sessionStorage.getItem('tms_visitor_name');
+    if (stored) {
+      router.replace('/schedule');
+      return;
+    }
+    // Tampilkan intro selama 2 detik, lalu muncul form
+    const t = setTimeout(() => setPhase('form'), 2200);
+    return () => clearTimeout(t);
+  }, [router]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    setIsLoading(true);
+    setError('');
+
+    const { exists, isTeacher } = await verifyVisitor(name.trim());
+
+    if (exists) {
+      sessionStorage.setItem('tms_visitor_name', name.trim());
+      sessionStorage.setItem('tms_visitor_role', isTeacher ? 'teacher' : 'student');
+      router.push('/schedule');
+    } else {
+      setError('Nama tidak ditemukan. Pastikan nama terdaftar di TMS.');
+      setShakeKey(k => k + 1);
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="app-container">
-      <Header isOnline={isOnline} />
+    <div className="opening-container">
+      {/* Background bokeh/particles */}
+      <div className="opening-bg-dots" />
 
-      <div className="toolbar-row">
-        <RoomTabs selectedRoom={selectedRoom} onRoomChange={setSelectedRoom} />
-        <Link href="/admin" className="admin-link">
-          ⚙️ Admin Panel
-        </Link>
-      </div>
-
-      <DaySelector selectedDay={selectedDay} onDayChange={setSelectedDay} />
-      <FilterBar
-        filters={filters}
-        onFiltersChange={setFilters}
-        scheduleData={scheduleData}
-      />
-
-      {isLoading ? (
-        <div className="loading-container">
-          <div className="loading-spinner" />
-          <div className="loading-text">Memuat jadwal...</div>
+      <div className={`opening-card ${phase === 'form' ? 'opening-card--expanded' : ''}`}>
+        {/* Logo + Title */}
+        <div className="opening-logo-wrap">
+          <div className="opening-logo-ring">
+            <Image
+              src="/logo_tms.PNG"
+              alt="Logo TMS"
+              width={90}
+              height={90}
+              style={{ objectFit: 'contain' }}
+              priority
+            />
+          </div>
         </div>
-      ) : (
-        <ScheduleTable
-          scheduleData={scheduleData}
-          selectedDay={selectedDay}
-          filters={filters}
-          onCellClick={() => {}}
-          readOnly
-        />
-      )}
 
-      <Legend />
+        <h1 className={`opening-title ${phase === 'form' ? 'opening-title--small' : ''}`}>
+          Selamat Datang di TMS
+        </h1>
+        <p className="opening-subtitle">
+          {phase === 'intro'
+            ? 'Tempat Musik Studio — Jadwal Kelas Murid'
+            : 'Masukkan namamu untuk melihat jadwal'}
+        </p>
+
+        {/* Divider */}
+        <div className={`opening-divider ${phase === 'form' ? 'opening-divider--visible' : ''}`} />
+
+        {/* Form */}
+        {phase === 'form' && (
+          <form
+            onSubmit={handleSubmit}
+            className="opening-form"
+            key={shakeKey}
+          >
+            <div className="opening-input-wrap">
+              <span className="opening-input-icon">🎵</span>
+              <input
+                type="text"
+                className="opening-input"
+                placeholder="Nama kamu..."
+                value={name}
+                onChange={e => { setName(e.target.value); setError(''); }}
+                autoFocus
+                disabled={isLoading}
+              />
+            </div>
+
+            {error && (
+              <div className="opening-error" key={`err-${shakeKey}`}>
+                ❌ {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="opening-btn"
+              disabled={isLoading || !name.trim()}
+            >
+              {isLoading
+                ? <><span className="opening-spinner" /> Memeriksa...</>
+                : <>Lihat Jadwal ➔</>
+              }
+            </button>
+
+            <p className="opening-hint">
+              Verifikasi untuk memastikan kamu murid TMS
+            </p>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

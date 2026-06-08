@@ -10,6 +10,7 @@ export default function ScheduleModal({
   onDelete,
   day,
   timeSlot,
+  room = 1,
   existingData,
   isAdmin = false,
 }) {
@@ -19,6 +20,7 @@ export default function ScheduleModal({
   const [teacherName, setTeacherName] = useState('');
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  const [selectedRoom, setSelectedRoom] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditing = !!existingData;
@@ -31,6 +33,7 @@ export default function ScheduleModal({
       setTeacherName(existingData.teacherName || '');
       setSelectedDay(existingData.day || day || '');
       setSelectedTime(existingData.timeSlot || timeSlot || '');
+      setSelectedRoom(existingData.room || room || 1);
     } else {
       setStudentName('');
       setInstrument('');
@@ -38,8 +41,9 @@ export default function ScheduleModal({
       setTeacherName('');
       setSelectedDay(day || 'Senin');
       setSelectedTime(timeSlot || '08:00');
+      setSelectedRoom(room || 1);
     }
-  }, [existingData, isOpen, day, timeSlot]);
+  }, [existingData, isOpen, day, timeSlot, room]);
 
   if (!isOpen) return null;
 
@@ -61,6 +65,7 @@ export default function ScheduleModal({
         teacherName: teacherName.trim(),
         day: activeDay,
         timeSlot: activeTime,
+        room: selectedRoom,
       });
     } finally {
       setIsSaving(false);
@@ -121,11 +126,23 @@ export default function ScheduleModal({
                   })}
                 </select>
               </div>
+              <div className="form-group">
+                <label>Ruangan *</label>
+                <select
+                  className="form-select"
+                  value={selectedRoom}
+                  onChange={e => setSelectedRoom(Number(e.target.value))}
+                >
+                  <option value={1}>Ruangan 1</option>
+                  <option value={2}>Ruangan 2</option>
+                </select>
+              </div>
             </div>
           ) : (
             <div className="modal-info">
               <div className="modal-info-badge">📅 {day}</div>
               <div className="modal-info-badge">🕐 {timeSlot} - {endTime}</div>
+              <div className="modal-info-badge">🚪 Ruang {selectedRoom}</div>
             </div>
           )}
 

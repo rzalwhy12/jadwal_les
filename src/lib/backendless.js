@@ -12,7 +12,9 @@ const TABLE_NAME = 'Schedule';
 export async function fetchSchedule(room) {
   try {
     const queryBuilder = Backendless.DataQueryBuilder.create();
-    queryBuilder.setWhereClause(`room = ${room}`);
+    if (room && room !== 0) {
+      queryBuilder.setWhereClause(`room = ${room}`);
+    }
     queryBuilder.setPageSize(100);
     queryBuilder.setSortBy(['day', 'timeSlot']);
     
@@ -55,6 +57,28 @@ export async function deleteScheduleItem(objectId) {
   } catch (error) {
     console.error('Error deleting schedule item:', error);
     throw error;
+  }
+}
+
+export async function verifyVisitor(name) {
+  try {
+    const queryBuilder = Backendless.DataQueryBuilder.create();
+    // Cari di nama murid ATAU nama guru
+    queryBuilder.setWhereClause(`studentName LIKE '%${name.trim()}%' OR teacherName LIKE '%${name.trim()}%'`);
+    queryBuilder.setPageSize(100);
+    const result = await Backendless.Data.of(TABLE_NAME).find(queryBuilder);
+    
+    if (result.length === 0) return { exists: false, isTeacher: false };
+    
+    // Periksa apakah nama yang dicari cocok dengan nama guru
+    const isTeacher = result.some(item => 
+      item.teacherName && item.teacherName.toLowerCase().includes(name.trim().toLowerCase())
+    );
+
+    return { exists: true, isTeacher };
+  } catch (error) {
+    console.error('Error verifying visitor:', error);
+    return { exists: false, isTeacher: false };
   }
 }
 

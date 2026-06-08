@@ -17,28 +17,71 @@ export default function ScheduleTable({
   selectedDay,
   filters,
   onCellClick,
+  onCellDrop,
   readOnly = false,
+  visitorName = '',
+  isTeacher = false,
 }) {
   const today = getTodayIndonesian();
-  const displayDays = selectedDay === 'Semua' ? DAYS : [selectedDay];
+  const displayDays = selectedDay === 'Semua' ? DAYS.filter(d => d !== 'Minggu') : [selectedDay];
   
-  // Build a lookup map: "day-timeSlot" -> data
+  // Build a lookup map: "day-timeSlot" -> { 1: data, 2: data }
   const dataMap = {};
   if (scheduleData) {
     scheduleData.forEach(item => {
       const key = `${item.day}-${item.timeSlot}`;
-      dataMap[key] = item;
+      if (!dataMap[key]) dataMap[key] = { 1: null, 2: null };
+      dataMap[key][item.room || 1] = item;
     });
   }
 
-  // Determine filtered items
+  // If visitorName is set and NOT a teacher, only show cells that belong to this visitor
+  const visitorNameLower = visitorName.trim().toLowerCase();
+  const isVisitorMode = visitorNameLower !== '' && !isTeacher;
+
+  // Returns: 'own' | 'booked' | 'empty'
+  const getCellStatus = (cellData) => {
+    if (!cellData) return 'empty';
+    if (!isVisitorMode) return 'own'; // admin/non-visitor mode: show all
+    return cellData.studentName?.toLowerCase().includes(visitorNameLower)
+      ? 'own'
+      : 'booked';
+  };
+
+  // Determine filtered items (for filter bar usage, not visitor mode)
   const filteredData = filterSchedule(scheduleData || [], filters);
   const filteredKeys = new Set(filteredData.map(item => `${item.day}-${item.timeSlot}`));
   
-  const hasActiveFilters = filters.instruments?.length > 0 ||
+  const hasActiveFilters = !isVisitorMode && (
+    filters.instruments?.length > 0 ||
     filters.mode !== '' ||
     filters.studentName?.trim() !== '' ||
-    filters.teacherName?.trim() !== '';
+    filters.teacherName?.trim() !== ''
+  );
+
+  const handleDragStart = (e, data) => {
+    e.dataTransfer.setData('application/json', JSON.stringify(data));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetDay, targetTimeSlot, targetRoom, targetData) => {
+    e.preventDefault();
+    try {
+      const dragDataString = e.dataTransfer.getData('application/json');
+      if (!dragDataString) return;
+      const draggedData = JSON.parse(dragDataString);
+      if (onCellDrop) {
+        onCellDrop(draggedData, targetDay, targetTimeSlot, targetRoom, targetData);
+      }
+    } catch (err) {
+      console.error('Failed to parse dropped data', err);
+    }
+  };
 
   return (
     <div className="schedule-wrapper">
@@ -74,17 +117,32 @@ export default function ScheduleTable({
                   </td>
                   {displayDays.map(day => {
                     const key = `${day}-${time}`;
-                    const cellData = dataMap[key] || null;
-                    const isFilteredOut = hasActiveFilters && cellData && !filteredKeys.has(key);
+                    const cellMap = dataMap[key] || { 1: null, 2: null };
 
                     return (
                       <td key={key}>
-                        <ScheduleCell
-                          data={cellData}
-                          isFilteredOut={isFilteredOut}
-                          onClick={() => onCellClick(day, time, cellData)}
-                          readOnly={readOnly}
-                        />
+                        <div className="table-rooms-wrapper">
+                          {[1, 2].map(room => {
+                            const cellData = cellMap[room];
+                            const isFilteredOut = hasActiveFilters && cellData && !filteredKeys.has(key);
+                            const status = getCellStatus(cellData);
+
+                            return (
+                              <ScheduleCell
+                                key={room}
+                                data={status === 'own' ? cellData : null}
+                                isBookedByOther={status === 'booked'}
+                                isFilteredOut={isFilteredOut}
+                                onClick={() => onCellClick(day, time, cellData, room)}
+                                readOnly={readOnly}
+                                room={room}
+                                onDragStart={handleDragStart}
+                                onDragOver={handleDragOver}
+                                onDrop={(e, targetData) => handleDrop(e, day, time, room, targetData)}
+                              />
+                            );
+                          })}
+                        </div>
                       </td>
                     );
                   })}
@@ -110,59 +168,70 @@ export default function ScheduleTable({
                 const endHour = parseInt(time.split(':')[0]) + 1;
                 const endTime = `${endHour.toString().padStart(2, '0')}:00`;
                 const key = `${day}-${time}`;
-                const cellData = dataMap[key] || null;
-                const isFilteredOut = hasActiveFilters && cellData && !filteredKeys.has(key);
-                const instrument = cellData ? INSTRUMENTS[cellData.instrument] : null;
-                const mode = cellData ? MODES[cellData.mode] : null;
+                const cellMap = dataMap[key] || { 1: null, 2: null };
 
-                if (isFilteredOut) return null;
+                return [1, 2].map(room => {
+                  const cellData = cellMap[room];
+                  const isFilteredOut = hasActiveFilters && cellData && !filteredKeys.has(key);
+                  const status = getCellStatus(cellData);
+                  const instrument = status === 'own' && cellData ? INSTRUMENTS[cellData.instrument] : null;
+                  const mode = status === 'own' && cellData ? MODES[cellData.mode] : null;
 
-                return (
-                  <div
-                    key={key}
-                    className={`mobile-slot ${cellData ? 'filled' : 'empty'} ${readOnly && !cellData ? 'read-only' : ''}`}
-                    onClick={readOnly && !cellData ? undefined : () => onCellClick(day, time, cellData)}
-                    style={cellData && instrument ? { borderLeftColor: instrument.color } : {}}
-                  >
-                    <div className="mobile-slot-time">
-                      <span className="mobile-time-text">{time}</span>
-                      <span className="mobile-time-divider">—</span>
-                      <span className="mobile-time-text">{endTime}</span>
-                    </div>
+                  if (isFilteredOut) return null;
 
-                    {cellData ? (
-                      <div className="mobile-slot-content">
-                        <div className="mobile-slot-student">{cellData.studentName}</div>
-                        <div className="mobile-slot-badges">
-                          {instrument && (
-                            <span
-                              className="mobile-slot-badge"
-                              style={{ background: instrument.bg, color: instrument.color }}
-                            >
-                              {instrument.emoji} {cellData.instrument}
-                            </span>
-                          )}
-                          {mode && (
-                            <span
-                              className="mobile-slot-badge"
-                              style={{ background: mode.bg, color: mode.color }}
-                            >
-                              {mode.emoji} {mode.label}
-                            </span>
+                  return (
+                    <div
+                      key={`${key}-${room}`}
+                      className={`mobile-slot ${status === 'booked' ? 'booked' : (cellData && status === 'own' ? 'filled' : 'empty')} ${readOnly && !cellData && status !== 'booked' ? 'read-only' : ''}`}
+                      onClick={readOnly && status !== 'booked' && !cellData ? undefined : status === 'booked' ? undefined : () => onCellClick(day, time, cellData, room)}
+                      style={status === 'own' && instrument ? { borderLeftColor: instrument.color } : {}}
+                    >
+                      <div className="mobile-slot-time">
+                        <span className="mobile-time-text">{time}</span>
+                        <span className="mobile-time-divider">—</span>
+                        <span className="mobile-time-text">{endTime}</span>
+                        <span className="mobile-time-room">R{room}</span>
+                      </div>
+
+                      {status === 'booked' ? (
+                        <div className="mobile-slot-booked">
+                          <span className="mobile-booked-icon">🔒</span>
+                          <span className="mobile-booked-text">Terisi (Ruang {room})</span>
+                        </div>
+                      ) : status === 'own' && cellData ? (
+                        <div className="mobile-slot-content">
+                          <div className="mobile-slot-student">{cellData.studentName}</div>
+                          <div className="mobile-slot-badges">
+                            {instrument && (
+                              <span
+                                className="mobile-slot-badge"
+                                style={{ background: instrument.bg, color: instrument.color }}
+                              >
+                                {instrument.emoji} {cellData.instrument}
+                              </span>
+                            )}
+                            {mode && (
+                              <span
+                                className="mobile-slot-badge"
+                                style={{ background: mode.bg, color: mode.color }}
+                              >
+                                {mode.emoji} {mode.label}
+                              </span>
+                            )}
+                          </div>
+                          {cellData.teacherName && (
+                            <div className="mobile-slot-teacher">👨‍🏫 {cellData.teacherName}</div>
                           )}
                         </div>
-                        {cellData.teacherName && (
-                          <div className="mobile-slot-teacher">👨‍🏫 {cellData.teacherName}</div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mobile-slot-empty">
-                        {!readOnly && <span className="mobile-add-icon">+</span>}
-                        <span className="mobile-empty-text">{readOnly ? 'Kosong' : 'Tambah'}</span>
-                      </div>
-                    )}
-                  </div>
-                );
+                      ) : (
+                        <div className="mobile-slot-empty">
+                          {!readOnly && <span className="mobile-add-icon">+</span>}
+                          <span className="mobile-empty-text">{readOnly ? 'Kosong' : 'Tambah'}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
               })}
             </div>
           </div>

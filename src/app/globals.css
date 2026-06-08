@@ -156,6 +156,20 @@ body::after {
   border: 2px solid rgba(255, 255, 255, 0.15);
 }
 
+.header-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--accent-glow);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
 .header-title {
   font-family: var(--font-chalk);
   font-size: 32px;
@@ -489,7 +503,8 @@ body::after {
 .schedule-table td {
   padding: 0;
   vertical-align: top;
-  height: 60px;
+  min-height: 140px;
+  height: 140px;
   border: none;
 }
 
@@ -575,10 +590,15 @@ body::after {
 }
 
 .schedule-cell.filled {
-  padding: 7px 10px;
+  padding: 4px 6px;
   border: 2px solid;
   background: rgba(255, 255, 255, 0.95);
   box-shadow: var(--shadow-cell);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
 .schedule-cell.filled:hover {
@@ -586,26 +606,145 @@ body::after {
   box-shadow: var(--shadow-md);
 }
 
+.schedule-cell[draggable="true"] {
+  cursor: grab;
+}
+
+.schedule-cell[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .schedule-cell.filtered-out {
   opacity: 0.15;
   pointer-events: none;
 }
 
-.cell-student {
+/* Slot terisi murid lain */
+.schedule-cell.booked-by-other {
+  padding: 7px 10px;
+  border: 2px dashed rgba(149, 130, 120, 0.4);
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(0,0,0,0.03),
+    rgba(0,0,0,0.03) 4px,
+    transparent 4px,
+    transparent 10px
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: not-allowed;
+}
+
+.cell-booked-icon {
+  font-size: 18px;
+  opacity: 0.5;
+}
+
+.cell-booked-text {
+  font-family: var(--font-hand);
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
+
+/* Wrapper for stacking 2 rooms in a table cell */
+.table-rooms-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+}
+
+.table-rooms-wrapper .schedule-cell {
+  flex: 1;
+  min-height: 52px;
+}
+
+/* Label R1 / R2 on empty cell */
+.cell-empty-room-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 10px;
+  color: #bfa99b;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* Badge R1 / R2 on filled cell */
+.cell-badge.room-badge {
+  background: #e2dcd3;
+  color: #6a5d53;
+  border: 1px solid #c8c0b5;
+  font-weight: 700;
+}
+
+/* Mobile booked state */
+.mobile-slot.booked {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(0,0,0,0.025),
+    rgba(0,0,0,0.025) 4px,
+    transparent 4px,
+    transparent 10px
+  );
+  border-left-color: rgba(150,150,150,0.25) !important;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.mobile-slot-booked {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.mobile-booked-icon {
+  font-size: 16px;
+  opacity: 0.5;
+}
+
+.mobile-booked-text {
   font-family: var(--font-hand);
   font-size: 14px;
-  font-weight: 400;
+  color: #888;
+}
+
+.cell-student {
+  font-family: var(--font-hand);
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-dark);
-  margin-bottom: 3px;
+  margin-bottom: 0;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: 100%;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cell-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
 }
 
 .cell-badges {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .cell-badge {
@@ -622,12 +761,13 @@ body::after {
 
 .cell-teacher {
   font-family: var(--font-hand);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-dark-secondary);
-  margin-top: 2px;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: auto;
 }
 
 /* ===== Modal ===== */
@@ -1853,5 +1993,273 @@ body::after {
     left: 16px;
     padding: 6px 14px;
     font-size: 14px;
+  }
+}
+
+/* ===== Opening Screen ===== */
+@keyframes openingFadeUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes openingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.5), var(--accent-glow); }
+  50%       { box-shadow: 0 0 0 18px rgba(249,115,22,0), var(--accent-glow); }
+}
+@keyframes openingDotsFloat {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0.4; }
+  50%  { opacity: 0.7; }
+  100% { transform: translateY(-120vh) rotate(720deg); opacity: 0; }
+}
+@keyframes openingShake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-10px); }
+  40%       { transform: translateX(10px); }
+  60%       { transform: translateX(-8px); }
+  80%       { transform: translateX(8px); }
+}
+@keyframes openingFormReveal {
+  from { opacity: 0; transform: scaleY(0.8); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+@keyframes openingSpinnerAnim {
+  to { transform: rotate(360deg); }
+}
+
+.opening-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Floating dots background */
+.opening-bg-dots {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.opening-bg-dots::before,
+.opening-bg-dots::after {
+  content: '♩ ♪ ♫ ♬ 🎵 🎶';
+  position: absolute;
+  font-size: 24px;
+  opacity: 0.08;
+  white-space: pre;
+  top: 100%;
+  left: 15%;
+  animation: openingDotsFloat 12s linear infinite;
+}
+.opening-bg-dots::after {
+  left: 60%;
+  animation-delay: 6s;
+  animation-duration: 16s;
+}
+
+.opening-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(249, 115, 22, 0.25);
+  border-radius: 24px;
+  padding: 48px 40px 40px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 32px 64px rgba(0,0,0,0.4), 0 0 40px rgba(249,115,22,0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  animation: openingFadeUp 0.7s ease both;
+  transition: padding 0.5s ease;
+}
+
+.opening-card--expanded {
+  padding-bottom: 36px;
+}
+
+.opening-logo-wrap {
+  margin-bottom: 24px;
+}
+
+.opening-logo-ring {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 3px solid rgba(249,115,22,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: openingPulse 2.5s ease-in-out infinite;
+  overflow: hidden;
+}
+
+.opening-title {
+  font-family: var(--font-chalk);
+  font-size: 30px;
+  color: var(--text-chalk);
+  text-align: center;
+  letter-spacing: 1px;
+  margin: 0 0 8px;
+  transition: font-size 0.5s ease;
+}
+
+.opening-title--small {
+  font-size: 22px;
+}
+
+.opening-subtitle {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--text-chalk-secondary);
+  text-align: center;
+  margin: 0;
+}
+
+.opening-divider {
+  width: 0;
+  height: 1px;
+  background: rgba(249,115,22,0.3);
+  margin: 20px 0;
+  opacity: 0;
+  transition: width 0.6s ease 0.2s, opacity 0.5s ease 0.2s;
+}
+
+.opening-divider--visible {
+  width: 80%;
+  opacity: 1;
+}
+
+.opening-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: openingFormReveal 0.5s ease both;
+}
+
+.opening-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.opening-input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  pointer-events: none;
+}
+
+.opening-input {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  border-radius: 12px;
+  border: 2px solid var(--border-chalk);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-family: var(--font-hand);
+  font-size: 18px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.opening-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 4px rgba(249,115,22,0.12);
+}
+
+.opening-input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+.opening-error {
+  background: rgba(239,68,68,0.15);
+  border: 1px solid rgba(239,68,68,0.35);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  text-align: center;
+  animation: openingShake 0.4s ease;
+}
+
+.opening-btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 12px;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-family: var(--font-chalk);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: var(--accent-glow);
+  transition: opacity 0.2s, transform 0.15s;
+}
+
+.opening-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.opening-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.opening-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: openingSpinnerAnim 0.7s linear infinite;
+  display: inline-block;
+}
+
+.opening-hint {
+  font-family: var(--font-hand);
+  font-size: 13px;
+  color: var(--text-chalk-muted);
+  text-align: center;
+  margin: 0;
+}
+
+/* Visitor greeting on schedule page */
+.visitor-greeting {
+  font-family: var(--font-hand);
+  font-size: 15px;
+  color: var(--text-chalk-secondary);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .opening-card {
+    padding: 36px 20px 28px;
+  }
+  .opening-title {
+    font-size: 24px;
+  }
+  .opening-title--small {
+    font-size: 18px;
+  }
+  .visitor-greeting {
+    display: none;
   }
 }
